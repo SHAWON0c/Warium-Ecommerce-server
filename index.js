@@ -12,41 +12,41 @@ const fileUpload = require("express-fileupload");
 
 
 
-app.use(cors({
-  origin: "http://localhost:5173", // allow all origins
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
-
-
 // app.use(cors({
-//   origin: "https://warium-792f8.web.app",
+//   origin: "http://localhost:5173", // allow all origins
 //   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-//   allowedHeaders: ["Content-Type", "Authorization"] // ✅ allow JWT header
+//   allowedHeaders: ["Content-Type", "Authorization"]
 // }));
 
-const allowedOrigins = [
-  "https://warium-792f8.web.app",
-  "http://localhost:5173"
-];
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  } else {
-    res.setHeader("Access-Control-Allow-Origin", "null"); // block other origins
-  }
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+app.use(cors({
+  origin: "https://warium-792f8.web.app",
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"] // ✅ allow JWT header
+}));
 
-  // Handle preflight requests
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
+// const allowedOrigins = [
+//   "https://warium-792f8.web.app",
+//   "http://localhost:5173"
+// ];
 
-  next();
-});
+// app.use((req, res, next) => {
+//   const origin = req.headers.origin;
+//   if (allowedOrigins.includes(origin)) {
+//     res.setHeader("Access-Control-Allow-Origin", origin);
+//   } else {
+//     res.setHeader("Access-Control-Allow-Origin", "null"); // block other origins
+//   }
+//   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+//   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+//   // Handle preflight requests
+//   if (req.method === "OPTIONS") {
+//     return res.sendStatus(204);
+//   }
+
+//   next();
+// });
 
 
 app.use(express.json());
