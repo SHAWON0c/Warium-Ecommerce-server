@@ -363,7 +363,7 @@ async function run() {
       }
     });
 
-    app.get('/users',  async (req, res) => {
+    app.get('/users', async (req, res) => {
 
       const result = await userCollection.find().toArray();
       res.send(result);
@@ -407,21 +407,40 @@ async function run() {
 
     })
 
+    // app.get('/users/admin/:email', async (req, res) => {
+
+    //   res.setHeader("Access-Control-Allow-Origin", "https://warium-792f8.web.app");
+    //   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+    //   res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+    //   const email = req.params.email;
+    //   if (email !== req.decoded.email) {
+    //     return res.status(403).send({ message: 'unothorized access' })
+    //   }
+    //   const query = { email: email };
+    //   const user = await userCollection.findOne(query);
+    //   let admin = false
+    //   if (user) {
+    //     admin = user.role === 'admin';
+
+    //   }
+    //   res.send({ admin });
+
+    // })
+
     app.get('/users/admin/:email', async (req, res) => {
-      const email = req.params.email;
-      if (email !== req.decoded.email) {
-        return res.status(403).send({ message: 'unothorized access' })
-      }
-      const query = { email: email };
-      const user = await userCollection.findOne(query);
-      let admin = false
-      if (user) {
-        admin = user.role === 'admin';
+  try {
+    const email = req.params.email;
+    const user = await userCollection.findOne({ email });
 
-      }
-      res.send({ admin });
+    let admin = false;
+    if(user) admin = user.role === 'admin';
 
-    })
+    res.send({ admin });
+  } catch(err) {
+    console.error(err);
+    res.status(500).send({ message: 'Internal server error' });
+  }
+});
 
     // GET all moderators - protected route example
     app.get('/moderators', async (req, res) => {
