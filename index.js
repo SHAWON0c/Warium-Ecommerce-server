@@ -9,34 +9,34 @@ const fileUpload = require("express-fileupload");
 
 // middleware 
 // middleware
-// app.use(cors({
-//   origin: "https://warium-792f8.web.app",
-//   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-//   allowedHeaders: ["Content-Type", "Authorization"] // ✅ allow JWT header
-// }));
+app.use(cors({
+  origin: "http://localhost:5173",
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"] // ✅ allow JWT header
+}));
 
-const allowedOrigins = [
-  "https://warium-792f8.web.app",
-  "http://localhost:5173"
-];
+// const allowedOrigins = [
+//   "https://warium-792f8.web.app",
+//   "http://localhost:5173"
+// ];
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  } else {
-    res.setHeader("Access-Control-Allow-Origin", "null"); // block other origins
-  }
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+// app.use((req, res, next) => {
+//   const origin = req.headers.origin;
+//   if (allowedOrigins.includes(origin)) {
+//     res.setHeader("Access-Control-Allow-Origin", origin);
+//   } else {
+//     res.setHeader("Access-Control-Allow-Origin", "null"); // block other origins
+//   }
+//   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+//   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-  // Handle preflight requests
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
+//   // Handle preflight requests
+//   if (req.method === "OPTIONS") {
+//     return res.sendStatus(204);
+//   }
 
-  next();
-});
+//   next();
+// });
 
 
 app.use(express.json());
