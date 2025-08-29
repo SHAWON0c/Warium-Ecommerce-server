@@ -9,10 +9,28 @@ const fileUpload = require("express-fileupload");
 
 // middleware 
 // middleware
+// app.use(cors({
+//   origin: "https://warium-792f8.web.app",
+//   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+//   allowedHeaders: ["Content-Type", "Authorization"] // ✅ allow JWT header
+// }));
+const allowedOrigins = [
+  "https://warium-792f8.web.app", // production
+  "http://localhost:5173"          // local development
+];
+
 app.use(cors({
-  origin: "https://warium-792f8.web.app",
+  origin: function(origin, callback) {
+    // allow requests with no origin (like Postman)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = `The CORS policy for this site does not allow access from the specified Origin.`;
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"] // ✅ allow JWT header
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
 
