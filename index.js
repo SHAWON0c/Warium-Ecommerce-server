@@ -1,116 +1,396 @@
-// index.js
 const express = require('express');
 const app = express();
 require('dotenv').config();
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
-const fileUpload = require('express-fileupload');
-const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-const axios = require('axios');
-const FormData = require('form-data');
+const fileUpload = require("express-fileupload");
 
-// -------------------- MIDDLEWARE --------------------
-app.use(cors({ origin: ["https://warium-792f8.web.app", "http://localhost:3000"] }));
+
+// middleware 
+// middleware
+app.use(cors({
+  origin: "https://warium-792f8.web.app",
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"] // ✅ allow JWT header
+}));
+
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(fileUpload());
 
-// -------------------- PORT --------------------
-const PORT = process.env.PORT || 5000;
 
-// -------------------- MONGODB --------------------
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.i01ualw.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
+
+// Declare a port (you can change 5000 to any available port)
+const port = process.env.PORT || 5000;
+
+const imageHostingKey = process.env.IMAGE_HOSTING_KEY;
+
+
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.i01ualw.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`
+
+// Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
-  serverApi: { version: ServerApiVersion.v1, strict: true, deprecationErrors: true }
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  }
 });
 
-let ProductCollection, CartsCollection, UserCollection, RoleRequestCollection;
-
-async function connectDB() {
+async function run() {
   try {
+    // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
-    const db = client.db("WariumDB");
-    ProductCollection = db.collection("Products");
-    CartsCollection = db.collection("Carts");
-    UserCollection = db.collection("Users");
-    RoleRequestCollection = db.collection("RoleRquest");
-    console.log("✅ MongoDB connected");
-  } catch (err) {
-    console.error("❌ MongoDB connection error:", err);
-  }
-}
+    // Send a ping to confirm a successful connection
 
-// -------------------- JWT MIDDLEWARE --------------------
-const verifyToken = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).send({ message: 'Forbidden' });
+    const database = client.db("WariumDB");
+    const ProductCollection = database.collection("Products");
+    const cartsCollection = database.collection("Carts");
+    const userCollection = database.collection("Users");
+    const roleRequestCollection = database.collection("RoleRquest");
 
-  const token = authHeader.split(' ')[1];
-  jwt.verify(token, process.env.ACCESS_TOKEN_SECRATE, (err, decoded) => {
-    if (err) return res.status(401).send({ message: 'Invalid token' });
-    req.decoded = decoded;
-    next();
-  });
-};
+    //JWT realted api 
 
-const verifyAdmin = async (req, res, next) => {
-  try {
-    const email = req.decoded?.email;
-    if (!email) return res.status(401).send({ message: 'Unauthorized' });
+    app.post('/jwt', async (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRATE,
+        {
+          expiresIn: '1hr'
+        }
+      );
+      res.send({ token });
 
-    const user = await UserCollection.findOne({ email });
-    if (!user || user.role !== 'admin') return res.status(403).send({ message: 'Admins only' });
+    })
 
-    next();
-  } catch (err) {
-    console.error(err);
-    res.status(500).send({ message: 'Server error in admin check' });
-  }
-};
 
-// -------------------- ROUTES --------------------
+    //file upload 
+    app.post("/upload-image", async (req, res) => {
+      try {
+        if (!req.files || !req.files.image) {
+          return res.status(400).json({ error: "No image file uploaded" });
+        }
 
-// Root test route
-app.get('/', (req, res) => res.send("Server is working"));
+        const image = req.files.image.data;
+        const formData = new FormData();
+        formData.append("image", image.toString("base64"));
 
-// JWT generation
-app.post('/jwt', (req, res) => {
-  const user = req.body;
-  const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRATE, { expiresIn: '1h' });
-  res.send({ token });
-});
+        const response = await axios.post(
+          `https://api.imgbb.com/1/upload?key=${process.env.IMGBB_API_KEY}`,
+          formData,
+          { headers: formData.getHeaders() }
+        );
 
-// -------------------- USERS --------------------
-app.post('/users', async (req, res) => {
-  try {
-    const userInfo = req.body;
-    const existingUser = await UserCollection.findOne({ email: userInfo.email });
-    if (existingUser) return res.status(200).send({ message: 'User already exists' });
-    const result = await UserCollection.insertOne(userInfo);
-    res.status(201).send(result);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send({ message: 'Server error while saving user' });
-  }
-});
-
-app.get('/users', async (req, res) => {
-  const users = await UserCollection.find().toArray();
-  res.send(users);
-});
-
-app.get('/users/:email', async (req, res) => {
-  const email = req.params.email;
-  const user = await UserCollection.findOne({ email });
-  if (!user) return res.status(404).send({ message: 'User not found' });
-  res.send(user);
-});
+        res.json(response.data);
+      } catch (err) {
+        console.error("Image upload failed:", err);
+        res.status(500).json({ error: "Upload failed" });
+      }
+    });
 
 
 
-   // GET all moderators - protected route example
+    // Role request collection
+    app.post('/role-requests', async (req, res) => {
+      const userInfo = req.body; // use lowercase consistently
+      try {
+        const result = await roleRequestCollection.insertOne(userInfo);
+        res.send(result);
+      } catch (error) {
+        console.error('Error inserting role request:', error);
+        res.status(500).send({ message: 'Internal Server Error' });
+      }
+    });
+
+    app.delete('/role-requests/:id', async (req, res) => {
+      const id = req.params.id;
+
+      try {
+        const result = await roleRequestCollection.deleteOne({ _id: new ObjectId(id) });
+
+        if (result.deletedCount === 1) {
+          res.send({ success: true, message: 'Role request deleted successfully.' });
+        } else {
+          res.status(404).send({ success: false, message: 'Role request not found.' });
+        }
+      } catch (error) {
+        console.error('Error deleting role request:', error);
+        res.status(500).send({ message: 'Internal Server Error' });
+      }
+    });
+
+
+
+
+    //products collection
+    const upload = multer(); // for non-file form data
+
+    app.post('/products', upload.none(), async (req, res) => {
+      try {
+        const productData = { ...req.body };
+
+        // -----------------------------
+        // Ensure sizes is an array
+        // -----------------------------
+        if (productData.sizes) {
+          if (typeof productData.sizes === "string") {
+            try {
+              // Try parsing as JSON (frontend might send stringified JSON)
+              productData.sizes = JSON.parse(productData.sizes);
+            } catch {
+              // Otherwise, assume comma-separated string
+              productData.sizes = productData.sizes.split(",").map(s => s.trim());
+            }
+          } else if (!Array.isArray(productData.sizes)) {
+            productData.sizes = [];
+          }
+        } else {
+          productData.sizes = [];
+        }
+
+        // -----------------------------
+        // Ensure colors is an array
+        // -----------------------------
+        if (productData.colors) {
+          if (typeof productData.colors === "string") {
+            try {
+              productData.colors = JSON.parse(productData.colors);
+            } catch {
+              productData.colors = productData.colors.split(",").map(c => c.trim());
+            }
+          } else if (!Array.isArray(productData.colors)) {
+            productData.colors = [];
+          }
+        } else {
+          productData.colors = [];
+        }
+
+        // -----------------------------
+        // Ensure tags is an array
+        // -----------------------------
+        if (productData.tags) {
+          if (typeof productData.tags === "string") {
+            productData.tags = productData.tags.split(",").map(t => t.trim());
+          } else if (!Array.isArray(productData.tags)) {
+            productData.tags = [];
+          }
+        } else {
+          productData.tags = [];
+        }
+
+        // -----------------------------
+        // Collect images
+        // -----------------------------
+        const images = [];
+        Object.keys(productData).forEach((key) => {
+          if (key.startsWith("image")) {
+            images.push(productData[key]);
+            delete productData[key]; // remove individual image fields
+          }
+        });
+        if (productData.images) {
+          if (typeof productData.images === "string") {
+            try {
+              productData.images = JSON.parse(productData.images);
+            } catch {
+              productData.images = [productData.images];
+            }
+          } else if (!Array.isArray(productData.images)) {
+            productData.images = [];
+          }
+        }
+        productData.images = [...images, ...(productData.images || [])];
+
+        // -----------------------------
+        // Insert into MongoDB
+        // -----------------------------
+        const result = await ProductCollection.insertOne(productData);
+        res.status(201).send(result);
+      } catch (error) {
+        console.error("❌ Backend error:", error);
+        res.status(500).send({ success: false, message: error.message });
+      }
+    });
+
+
+
+
+
+
+    app.get('/products', async (req, res) => {
+      res.setHeader("Access-Control-Allow-Origin", "https://warium-792f8.web.app");
+      res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+      const result = await ProductCollection.find().toArray();
+      res.send(result);
+    })
+
+
+    app.get("/api/products/:id", async (req, res) => {
+      try {
+        const product = await ProductCollection.findById(req.params.id);
+        if (!product) return res.status(404).json({ message: "Product not found" });
+        res.json(product);
+      } catch (err) {
+        res.status(500).json({ message: "Server error", error: err });
+      }
+    });
+
+
+
+    //carts collection
+
+    app.post('/carts', async (req, res) => {
+      const cartItem = req.body;
+      const result = await cartsCollection.insertOne(cartItem);
+      res.send(result);
+
+    })
+
+    app.get('/carts', async (req, res) => {
+      const email = req.query.email;
+      const query = { email: email };
+      const result = await cartsCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    app.delete('/carts/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await cartsCollection.deleteOne(query);
+      res.send(result);
+
+
+    })
+
+    //middlewares
+    const verifyToken = (req, res, next) => {
+      //('inside verify token', req.headers.authorization);
+
+      if (!req.headers.authorization) {
+        return res.status(401).send({ message: 'forbiden' });
+      }
+      const token = req.headers.authorization.split(' ')[1];
+      //  if(!token)
+      //  {
+      //   return res.status(401).send({message: 'forbiden'});
+      //  }
+
+      jwt.verify(token, process.env.ACCESS_TOKEN_SECRATE, (err, decoded) => {
+        if (err) {
+          return res.status(401).send({ message: ' token invailid' });
+        }
+        req.decoded = decoded;
+        next();
+      });
+
+    };
+
+    const verifyAdmin = async (req, res, next) => {
+      try {
+        //('Decoded token:', req.decoded);
+        const email = req.decoded?.email;
+        if (!email) {
+          return res.status(401).send({ message: 'Unauthorized: No email in token' });
+        }
+
+        const user = await userCollection.findOne({ email });
+        //('User found:', user);
+
+        if (!user || user.role !== 'admin') {
+          return res.status(403).send({ message: 'Forbidden access: Admins only' });
+        }
+
+        next();
+      } catch (error) {
+        console.error('Error in verifyAdmin:', error);
+        res.status(500).send({ message: 'Internal server error in admin check' });
+      }
+    };
+
+    //user realted API
+    app.post('/users', async (req, res) => {
+      try {
+        const userInfo = req.body;
+
+        const query = { email: userInfo.email };
+        const existingUser = await userCollection.findOne(query);
+
+        if (existingUser) {
+          return res.status(200).send({ message: 'User already exists' });
+        }
+
+        const result = await userCollection.insertOne(userInfo);
+        res.status(201).send(result); // 201 for "created"
+      } catch (error) {
+        console.error('Error inserting user:', error);
+        res.status(500).send({ message: 'Server error while saving user' });
+      }
+    });
+
+    app.get('/users',  async (req, res) => {
+
+      const result = await userCollection.find().toArray();
+      res.send(result);
+
+    })
+
+
+    //get user via email
+    app.get('/users/:email', async (req, res) => {
+      const email = req.params.email;
+
+      try {
+        const user = await userCollection.findOne({ email });
+
+        if (!user) {
+          return res.status(404).send({ message: 'User not found' });
+        }
+
+        res.send(user);
+      } catch (error) {
+        console.error('Error fetching user:', error);
+        res.status(500).send({ message: 'Internal server error' });
+      }
+    });
+    app.get('/requested-users', async (req, res) => {
+
+      const result = await roleRequestCollection.find().toArray();
+      res.send(result);
+
+    })
+
+
+
+    //dashboard related API
+
+    app.delete('/users/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) }
+      const result = await userCollection.deleteOne(query);
+      res.send(result);
+
+    })
+
+    app.get('/users/admin/:email', async (req, res) => {
+      const email = req.params.email;
+      if (email !== req.decoded.email) {
+        return res.status(403).send({ message: 'unothorized access' })
+      }
+      const query = { email: email };
+      const user = await userCollection.findOne(query);
+      let admin = false
+      if (user) {
+        admin = user.role === 'admin';
+
+      }
+      res.send({ admin });
+
+    })
+
+    // GET all moderators - protected route example
     app.get('/moderators', async (req, res) => {
       try {
         const moderators = await userCollection.find({ role: 'moderator' }).toArray();
@@ -131,145 +411,67 @@ app.get('/users/:email', async (req, res) => {
       }
     });
 
-    
 
-// Admin check
-app.get('/users/admin/:email', verifyToken, async (req, res) => {
-  const email = req.params.email;
-  if (email !== req.decoded.email) return res.status(403).send({ message: 'Unauthorized' });
-  const user = await UserCollection.findOne({ email });
-  res.send({ admin: user?.role === 'admin' });
-});
-
-// Update roles
-app.patch('/users/vendor/:id', async (req, res) => {
-  const id = req.params.id;
-  const result = await UserCollection.updateOne({ _id: new ObjectId(id) }, { $set: { role: 'vendor' } });
-  res.send(result);
-});
-app.patch('/users/admin/:id', async (req, res) => {
-  const id = req.params.id;
-  const result = await UserCollection.updateOne({ _id: new ObjectId(id) }, { $set: { role: 'admin' } });
-  res.send(result);
-});
-app.patch('/users/moderator/:id', async (req, res) => {
-  const id = req.params.id;
-  const result = await UserCollection.updateOne({ _id: new ObjectId(id) }, { $set: { role: 'moderator' } });
-  res.send(result);
-});
-
-// Delete user
-app.delete('/users/:id', async (req, res) => {
-  const id = req.params.id;
-  const result = await UserCollection.deleteOne({ _id: new ObjectId(id) });
-  res.send(result);
-});
-
-// -------------------- ROLE REQUESTS --------------------
-app.post('/role-requests', async (req, res) => {
-  try {
-    const result = await RoleRequestCollection.insertOne(req.body);
-    res.send(result);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send({ message: 'Internal Server Error' });
-  }
-});
-app.delete('/role-requests/:id', async (req, res) => {
-  const id = req.params.id;
-  const result = await RoleRequestCollection.deleteOne({ _id: new ObjectId(id) });
-  if (result.deletedCount === 1) res.send({ success: true, message: 'Deleted' });
-  else res.status(404).send({ success: false, message: 'Not found' });
-});
-app.get('/requested-users', async (req, res) => {
-  const requests = await RoleRequestCollection.find().toArray();
-  res.send(requests);
-});
-
-// -------------------- PRODUCTS --------------------
-const upload = multer();
-app.post('/products', upload.none(), async (req, res) => {
-  try {
-    let productData = { ...req.body };
-
-    // Parse arrays
-    ['sizes', 'colors', 'tags'].forEach(field => {
-      if (productData[field]) {
-        if (typeof productData[field] === "string") {
-          try { productData[field] = JSON.parse(productData[field]); }
-          catch { productData[field] = productData[field].split(',').map(x => x.trim()); }
-        } else if (!Array.isArray(productData[field])) productData[field] = [];
-      } else productData[field] = [];
+    ////////////////////
+    app.patch('/users/vendor/:id', async (req, res) => {
+      const id = req.params.id;
+      ("Vendor route hit:", req.params.id);
+      const filter = { _id: new ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          role: 'vendor',
+        },
+      };
+      const result = await userCollection.updateOne(filter, updatedDoc);
+      res.send(result);
     });
 
-    // Handle images
-    const images = [];
-    Object.keys(productData).forEach(key => { if (key.startsWith("image")) { images.push(productData[key]); delete productData[key]; } });
-    if (productData.images) {
-      if (typeof productData.images === "string") {
-        try { productData.images = JSON.parse(productData.images); }
-        catch { productData.images = [productData.images]; }
-      } else if (!Array.isArray(productData.images)) productData.images = [];
-    }
-    productData.images = [...images, ...(productData.images || [])];
 
-    const result = await ProductCollection.insertOne(productData);
-    res.status(201).send(result);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send({ message: err.message });
+
+
+    /////////////////////////////////////////////
+
+    app.patch('/users/admin/:id', async (req, res) => {
+      const id = req.params.id;
+      ("Vendor route hit:", req.params.id);
+      const filter = { _id: new ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          role: 'admin',
+        },
+      };
+
+      const result = await userCollection.updateOne(filter, updatedDoc);
+      res.send(result);
+    });
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    app.patch('/users/moderator/:id', async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          role: 'moderator',
+        },
+      };
+
+      const result = await userCollection.updateOne(filter, updatedDoc);
+      res.send(result);
+    });
+
+
+    await client.db("admin").command({ ping: 1 });
+    //("Pinged your deployment. You successfully connected to MongoDB!");
+  } finally {
+    // Ensures that the client will close when you finish/error
+    // await client.close();
   }
-});
-
-app.get('/products', async (req, res) => {
-  const products = await ProductCollection.find().toArray();
-  res.send(products);
-});
-
-app.get('/products/:id', async (req, res) => {
-  try {
-    const product = await ProductCollection.findOne({ _id: new ObjectId(req.params.id) });
-    if (!product) return res.status(404).send({ message: 'Product not found' });
-    res.send(product);
-  } catch (err) {
-    res.status(500).send({ message: 'Server error', error: err });
-  }
-});
-
-// -------------------- CARTS --------------------
-app.post('/carts', async (req, res) => {
-  const result = await CartsCollection.insertOne(req.body);
-  res.send(result);
-});
-app.get('/carts', async (req, res) => {
-  const email = req.query.email;
-  const carts = await CartsCollection.find({ email }).toArray();
-  res.send(carts);
-});
-app.delete('/carts/:id', async (req, res) => {
-  const result = await CartsCollection.deleteOne({ _id: new ObjectId(req.params.id) });
-  res.send(result);
-});
-
-// -------------------- FILE UPLOAD --------------------
-app.post('/upload-image', async (req, res) => {
-  try {
-    if (!req.files || !req.files.image) return res.status(400).send({ error: "No image uploaded" });
-    const image = req.files.image.data;
-    const formData = new FormData();
-    formData.append("image", image.toString("base64"));
-    const response = await axios.post(`https://api.imgbb.com/1/upload?key=${process.env.IMGBB_API_KEY}`, formData, { headers: formData.getHeaders() });
-    res.send(response.data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send({ error: "Upload failed" });
-  }
-});
-
-// -------------------- START SERVER --------------------
-async function startServer() {
-  await connectDB();
-  app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
 }
+run().catch(console.dir);
 
-startServer();
+app.get('/', (req, res) => {
+  res.send('Server is working');
+});
+
+app.listen(port, () => {
+  //(`Server is running on port ${port}`);
+});
