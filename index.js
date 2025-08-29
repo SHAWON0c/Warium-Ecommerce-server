@@ -15,27 +15,28 @@ const fileUpload = require("express-fileupload");
 //   allowedHeaders: ["Content-Type", "Authorization"] // ✅ allow JWT header
 // }));
 
-
 const allowedOrigins = [
-  "https://warium-792f8.web.app", // production
-  "http://localhost:5173"          // local development
+  "https://warium-792f8.web.app",
+  "http://localhost:5173"
 ];
 
-app.use(cors({
-  origin: function(origin, callback) {
-    // allow requests with no origin (like Postman or server-to-server)
-    if (!origin) return callback(null, true);
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  } else {
+    res.setHeader("Access-Control-Allow-Origin", "null"); // block other origins
+  }
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true); // allow this origin
-    } else {
-      callback(new Error("Not allowed by CORS"), false);
-    }
-  },
-  credentials: true, // allow cookies or auth headers
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
+  // Handle preflight requests
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+
+  next();
+});
 
 
 app.use(express.json());
