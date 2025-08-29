@@ -108,6 +108,31 @@ app.get('/users/:email', async (req, res) => {
   res.send(user);
 });
 
+
+
+   // GET all moderators - protected route example
+    app.get('/moderators', async (req, res) => {
+      try {
+        const moderators = await userCollection.find({ role: 'moderator' }).toArray();
+        res.send(moderators);
+      } catch (error) {
+        console.error('Error fetching moderators:', error);
+        res.status(500).send({ message: 'Internal server error' });
+      }
+    });
+    //get all the vendors
+    app.get('/vendors', async (req, res) => {
+      try {
+        const moderators = await userCollection.find({ role: 'vendor' }).toArray();
+        res.send(moderators);
+      } catch (error) {
+        console.error('Error fetching moderators:', error);
+        res.status(500).send({ message: 'Internal server error' });
+      }
+    });
+
+    
+
 // Admin check
 app.get('/users/admin/:email', verifyToken, async (req, res) => {
   const email = req.params.email;
