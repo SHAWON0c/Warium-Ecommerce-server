@@ -253,9 +253,9 @@ async function run() {
 
 
     app.get('/products', async (req, res) => {
-      // res.setHeader("Access-Control-Allow-Origin", "https://warium-792f8.web.app");
-      // res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-      // res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+      res.setHeader("Access-Control-Allow-Origin", "https://warium-792f8.web.app");
+      res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
       const result = await ProductCollection.find().toArray();
       res.send(result);
     })
