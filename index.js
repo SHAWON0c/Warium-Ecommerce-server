@@ -12,18 +12,14 @@ const fileUpload = require("express-fileupload");
 
 
 
+app.use(cors());
+
+
 // app.use(cors({
-//   origin: "http://localhost:5173", // allow all origins
+//   origin: "https://warium-792f8.web.app",
 //   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-//   allowedHeaders: ["Content-Type", "Authorization"]
+//   allowedHeaders: ["Content-Type", "Authorization"] // ✅ allow JWT header
 // }));
-
-
-app.use(cors({
-  origin: "https://warium-792f8.web.app",
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"] // ✅ allow JWT header
-}));
 
 // const allowedOrigins = [
 //   "https://warium-792f8.web.app",
@@ -252,24 +248,83 @@ async function run() {
 
 
 
+    // app.get('/products', async (req, res) => {
+    //   // res.setHeader("Access-Control-Allow-Origin", "https://warium-792f8.web.app");
+    //   // res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+    //   // res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+    //   const result = await ProductCollection.find().toArray();
+    //   res.send(result);
+    // })
+
     app.get('/products', async (req, res) => {
-      res.setHeader("Access-Control-Allow-Origin", "https://warium-792f8.web.app");
-      res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-      res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
-      const result = await ProductCollection.find().toArray();
-      res.send(result);
-    })
-
-
-    app.get("/api/products/:id", async (req, res) => {
       try {
-        const product = await ProductCollection.findById(req.params.id);
-        if (!product) return res.status(404).json({ message: "Product not found" });
-        res.json(product);
-      } catch (err) {
-        res.status(500).json({ message: "Server error", error: err });
+        const { vendorEmail } = req.query;
+
+        let query = {};
+        if (vendorEmail) {
+          query.userEmail = vendorEmail; // must match DB field name
+        }
+
+        const result = await ProductCollection.find(query).toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching products:", error);
+        res.status(500).send({ error: "Internal server error" });
       }
     });
+
+
+
+
+    // app.get("/api/products/:id", async (req, res) => {
+    //   try {
+    //     const product = await ProductCollection.findById(req.params.id);
+    //     if (!product) return res.status(404).json({ message: "Product not found" });
+    //     res.json(product);
+    //   } catch (err) {
+    //     res.status(500).json({ message: "Server error", error: err });
+    //   }
+    // });
+
+    app.get("/api/products/:id", async (req, res) => {
+  const { id } = req.params;
+
+  // Validate ID
+  if (!ObjectId.isValid(id)) {
+    return res.status(400).json({ message: "Invalid product ID" });
+  }
+
+  try {
+    const product = await ProductCollection.findOne({ _id: new ObjectId(id) });
+    if (!product) return res.status(404).json({ message: "Product not found" });
+    res.json(product);
+  } catch (err) {
+    console.error("Error fetching product:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+
+// Update product
+app.put("/api/products/:id", async (req, res) => {
+  const { id } = req.params;
+  const updateData = req.body;
+
+  if (!ObjectId.isValid(id)) return res.status(400).json({ message: "Invalid ID" });
+
+  try {
+    const result = await ProductCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updateData }
+    );
+
+    if (!result.matchedCount) return res.status(404).json({ message: "Product not found" });
+    res.json({ message: "Product updated successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
 
 
 
@@ -282,12 +337,12 @@ async function run() {
 
     })
 
-    app.get('/carts', async (req, res) => {
+    app.get("/carts", async (req, res) => {
       const email = req.query.email;
-      const query = { email: email };
-      const result = await cartsCollection.find(query).toArray();
-      res.send(result);
+      const cartItems = await cartsCollection.find({ userEmail: email }).toArray();
+      res.send(cartItems);
     });
+
 
     app.delete('/carts/:id', async (req, res) => {
       const id = req.params.id;
@@ -407,11 +462,11 @@ async function run() {
 
     })
 
-    app.get('/users/admin/:email', async (req, res) => {
+    app.get('/users/admin/:email',verifyToken,verifyAdmin, async (req, res) => {
 
-      res.setHeader("Access-Control-Allow-Origin", "https://warium-792f8.web.app");
-      res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-      res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+      // res.setHeader("Access-Control-Allow-Origin", "https://warium-792f8.web.app");
+      // res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+      // res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
       const email = req.params.email;
       if (email !== req.decoded.email) {
         return res.status(403).send({ message: 'unothorized access' })
@@ -509,6 +564,7 @@ app.get('/', (req, res) => {
   res.send('Server is working');
 });
 
-app.listen(port, () => {
-  //(`Server is running on port ${port}`);
+app.listen(5000, '0.0.0.0', () => {
+  console.log('Server running on http://0.0.0.0:5000');
 });
+
