@@ -12,14 +12,14 @@ const fileUpload = require("express-fileupload");
 
 
 
-// app.use(cors());
+// node
+app.use(cors());
 
-
-app.use(cors({
-  origin: "https://warium-792f8.web.app",
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"] // ✅ allow JWT header
-}));
+// app.use(cors({
+//   origin: ['http://localhost:5173', 'https://your-firebase-app.web.app'],
+//   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+//   allowedHeaders: ["Content-Type", "Authorization"] // ✅ allow JWT header
+// }));
 
 // const allowedOrigins = [
 //   "https://warium-792f8.web.app",
@@ -80,6 +80,8 @@ async function run() {
     const cartsCollection = database.collection("Carts");
     const userCollection = database.collection("Users");
     const roleRequestCollection = database.collection("RoleRquest");
+    const couponCollection = database.collection("Coupon");
+
 
     //JWT realted api 
 
@@ -286,45 +288,45 @@ async function run() {
     //   }
     // });
 
-    app.get("/api/products/:id", async (req, res) => {
-  const { id } = req.params;
+    app.get("/products/:id", async (req, res) => {
+      const { id } = req.params;
 
-  // Validate ID
-  if (!ObjectId.isValid(id)) {
-    return res.status(400).json({ message: "Invalid product ID" });
-  }
+      // Validate ID
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).json({ message: "Invalid product ID" });
+      }
 
-  try {
-    const product = await ProductCollection.findOne({ _id: new ObjectId(id) });
-    if (!product) return res.status(404).json({ message: "Product not found" });
-    res.json(product);
-  } catch (err) {
-    console.error("Error fetching product:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
-});
+      try {
+        const product = await ProductCollection.findOne({ _id: new ObjectId(id) });
+        if (!product) return res.status(404).json({ message: "Product not found" });
+        res.json(product);
+      } catch (err) {
+        console.error("Error fetching product:", err);
+        res.status(500).json({ message: "Server error", error: err.message });
+      }
+    });
 
 
-// Update product
-app.put("/api/products/:id", async (req, res) => {
-  const { id } = req.params;
-  const updateData = req.body;
+    // Update product
+    app.put("/api/products/:id", async (req, res) => {
+      const { id } = req.params;
+      const updateData = req.body;
 
-  if (!ObjectId.isValid(id)) return res.status(400).json({ message: "Invalid ID" });
+      if (!ObjectId.isValid(id)) return res.status(400).json({ message: "Invalid ID" });
 
-  try {
-    const result = await ProductCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: updateData }
-    );
+      try {
+        const result = await ProductCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: updateData }
+        );
 
-    if (!result.matchedCount) return res.status(404).json({ message: "Product not found" });
-    res.json({ message: "Product updated successfully" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
-});
+        if (!result.matchedCount) return res.status(404).json({ message: "Product not found" });
+        res.json({ message: "Product updated successfully" });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Server error", error: err.message });
+      }
+    });
 
 
 
@@ -398,6 +400,102 @@ app.put("/api/products/:id", async (req, res) => {
       }
     };
 
+    //coupon
+
+    app.post('/coupon', async (req, res) => {
+      try {
+        const { code, discountType, discountValue, minPurchase, startDate, endDate, usageLimit, isActive, addedByEmail, addedByName } = req.body;
+
+        // Basic validation
+        if (!code || !discountType || !discountValue) {
+          return res.status(400).json({ error: "Coupon code, type, and value are required." });
+        }
+
+        const couponData = {
+          code,
+          discountType,
+          discountValue: Number(discountValue),
+          minPurchase: minPurchase ? Number(minPurchase) : 0,
+          startDate: startDate ? new Date(startDate) : null,
+          endDate: endDate ? new Date(endDate) : null,
+          usageLimit: usageLimit ? Number(usageLimit) : null,
+          isActive: false,
+          isApproved: false,
+          createdBy: {
+            addedByEmail: addedByEmail,
+            addedByName: addedByName,
+            createdAt: new Date(),
+          },
+        };
+
+        const result = await couponCollection.insertOne(couponData);
+
+        res.status(201).json({ message: "Coupon created successfully", couponId: result.insertedId });
+      } catch (error) {
+        console.error("Error creating coupon:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    });
+    // Get only approved coupons
+    app.get("/coupons/approved", async (req, res) => {
+      try {
+        const result = await couponCollection.find({ isApproved: true }).toArray();
+        res.json(result);
+      } catch (error) {
+        console.error("Error fetching approved coupons:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    });
+
+
+    app.get('/coupons/pending', async (req, res) => {
+      try {
+        const result = await couponCollection.find({ isApproved: false }).toArray();
+        res.json(result);
+      } catch (error) {
+        console.error("Error fetching pending coupons:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    });
+
+    app.patch('/coupon/approve/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { adminEmail, adminName } = req.body; // info about who approves
+
+        if (!adminEmail || !adminName) {
+          return res.status(400).json({ error: "Admin info is required to approve coupon" });
+        }
+
+        const result = await couponCollection.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: {
+              isApproved: true,
+              isActive: true,
+              approvedBy: {
+                email: adminEmail,
+                name: adminName,
+                approvedAt: new Date(),
+              },
+            },
+          }
+        );
+
+        if (result.modifiedCount === 0) {
+          return res.status(404).json({ error: "Coupon not found" });
+        }
+
+        res.json({ message: "Coupon approved & activated successfully" });
+      } catch (error) {
+        console.error("Error approving coupon:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    });
+
+
+
+
     //user realted API
     app.post('/users', async (req, res) => {
       try {
@@ -462,7 +560,7 @@ app.put("/api/products/:id", async (req, res) => {
 
     })
 
-    app.get('/users/admin/:email',verifyToken,verifyAdmin, async (req, res) => {
+    app.get('/users/admin/:email', verifyToken, verifyAdmin, async (req, res) => {
 
       // res.setHeader("Access-Control-Allow-Origin", "https://warium-792f8.web.app");
       // res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
